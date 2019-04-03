@@ -1,9 +1,9 @@
-import requests
+from urllib import request
 import json
 from datetime import datetime, timedelta
 
 
-TOKEN = "<inser token here>"
+TOKEN = "<insert token here>"
 USERS_LIST_URL = "https://slack.com/api/users.list?token=" + TOKEN
 ACCESS_LOGS_URL = "https://slack.com/api/team.accessLogs?token=" + TOKEN + "&count=1000"
 SLACK_BOT_ID = "USLACKBOT"
@@ -12,8 +12,9 @@ PERIOD = 90
 
 def get_users_list():
     print("Fetching all users...", end="", flush=True)
-    response = requests.get(USERS_LIST_URL)
-    response_json = response.json()
+    response = request.urlopen(USERS_LIST_URL)
+    response_json = json.loads(response.read().decode(
+        response.info().get_content_charset()))
     if response_json["ok"] is False:
         raise Exception("Slack API returned error: " + response_json["error"])
     print("done")
@@ -28,8 +29,10 @@ def get_lately_logged_in_users():
 
     print("Fetching access logs", end="", flush=True)
     while True:
-        response = requests.get(ACCESS_LOGS_URL + "&page=" + str(page))
-        response_json = response.json()
+        response = request.urlopen(ACCESS_LOGS_URL + "&page=" + str(page))
+        response_json = json.loads(response.read().decode(
+            response.info().get_content_charset()))
+
         if response_json["ok"] is False:
             raise Exception("Slack API returned error: " +
                             response_json["error"])
