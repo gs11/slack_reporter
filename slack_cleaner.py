@@ -21,7 +21,7 @@ def get_users_list():
         response.info().get_content_charset()))
     if response_json["ok"] is False:
         raise Exception("Slack API returned error: " + response_json["error"])
-    print("done")
+    print("done ({} users)".format(len(response_json["members"])))
 
     for user in response_json["members"]:
         if "email" in user["profile"]:
@@ -36,6 +36,7 @@ def get_lately_logged_in_users():
     page = 0
 
     print("Fetching access logs", end="", flush=True)
+    entries = 0
     while True:
         response = request.urlopen(ACCESS_LOGS_URL + "&page=" + str(page))
         response_json = json.loads(response.read().decode(
@@ -46,9 +47,11 @@ def get_lately_logged_in_users():
                             response_json["error"])
         for login in response_json["logins"]:
             if login["date_last"] > nintety_days_ago:
-                users[login["user_id"]] = login["date_last"]
+                if login["user_id"] not in users:
+                    users[login["user_id"]] = login["date_last"]
+                entries += 1
             else:
-                print("done")
+                print("done ({} entries)".format(entries))
                 return users
         print(".", end="", flush=True)
         page += 1
@@ -61,7 +64,7 @@ def get_users_and_channels():
     response = request.urlopen(CHANNELS_LIST_URL)
     response_json = json.loads(response.read().decode(
         response.info().get_content_charset()))
-    print("done")
+    print("done ({} channels)".format(len(response_json["channels"])))
     for channel in response_json["channels"]:
         for member in channel["members"]:
             if member not in user_channels:
