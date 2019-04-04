@@ -13,7 +13,8 @@ Pythonified from a bash script from [@jannylund](http://github.com/jannylund)
 Create a Slack API legacy token or an OAuth token with sufficient scope. Copy it into the script and run using Python 3.x:
 
 ```
-python slack_cleaner.sh
+export SLACK_TOKEN="<REDACTED>"
+python slack_cleaner.py
 ```
 
 ## TODO

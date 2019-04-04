@@ -1,13 +1,13 @@
 from urllib import request
 import json
 from datetime import datetime, timedelta
+import os
 
-
-TOKEN = "<insert token here>"
+TOKEN = os.getenv('SLACKTOKEN')
 USERS_LIST_URL = "https://slack.com/api/users.list?token=" + TOKEN
 ACCESS_LOGS_URL = "https://slack.com/api/team.accessLogs?token=" + TOKEN + "&count=1000"
-# Deprecated but provides the ability to list all channels + all their members in one call
-CHANNELS_LIST_URL = "https://slack.com/api/channels.list?token=" + TOKEN + "&count=1000"
+CONVERSATIONS_LIST_URL = "https://slack.com/api/conversations.list?token=" + TOKEN + "&limit=1000"
+CONVERSATIONS_MEMBERS_URL = "https://slack.com/api/conversations.members?token=" + TOKEN
 SLACK_BOT_ID = "USLACKBOT"
 PERIOD = 90
 
@@ -17,8 +17,7 @@ def get_users_list():
 
     print("Fetching all users...", end="", flush=True)
     response = request.urlopen(USERS_LIST_URL)
-    response_json = json.loads(response.read().decode(
-        response.info().get_content_charset()))
+    response_json = json.loads(response.read().decode(response.info().get_content_charset()))
     if response_json["ok"] is False:
         raise Exception("Slack API returned error: " + response_json["error"])
     print("done ({} users)".format(len(response_json["members"])))
@@ -27,6 +26,21 @@ def get_users_list():
         if "email" in user["profile"]:
             users[user["id"]] = user
     return users
+
+
+def get_conversations_list():
+    conversations = {}
+
+    print("Fetching all conversations...", end="", flush=True)
+    response = request.urlopen(CONVERSATIONS_LIST_URL)
+    response_json = json.loads(response.read().decode(response.info().get_content_charset()))
+    if response_json["ok"] is False:
+        raise Exception("Slack API returned error: " + response_json["error"])
+    print("done ({} channels)".format(len(response_json["channels"])))
+
+    for channel in response_json["channels"]:
+        conversations[channel["id"]] = channel
+    return conversations
 
 
 def get_lately_logged_in_users():
@@ -39,12 +53,10 @@ def get_lately_logged_in_users():
     entries = 0
     while True:
         response = request.urlopen(ACCESS_LOGS_URL + "&page=" + str(page))
-        response_json = json.loads(response.read().decode(
-            response.info().get_content_charset()))
+        response_json = json.loads(response.read().decode(response.info().get_content_charset()))
 
         if response_json["ok"] is False:
-            raise Exception("Slack API returned error: " +
-                            response_json["error"])
+            raise Exception("Slack API returned error: " + response_json["error"])
         for login in response_json["logins"]:
             if login["date_last"] > nintety_days_ago:
                 if login["user_id"] not in users:
@@ -58,18 +70,19 @@ def get_lately_logged_in_users():
     return users
 
 
-def get_users_and_channels():
+def get_users_and_channels(channels):
     user_channels = {}
-    print("Fetching all channels and their members...", end="", flush=True)
-    response = request.urlopen(CHANNELS_LIST_URL)
-    response_json = json.loads(response.read().decode(
-        response.info().get_content_charset()))
-    print("done ({} channels)".format(len(response_json["channels"])))
-    for channel in response_json["channels"]:
-        for member in channel["members"]:
-            if member not in user_channels:
-                user_channels[member] = []
-            user_channels[member].append(channel["id"])
+    print("Fetching all members of each channel...")
+    for chan in channels:
+        if channels[chan]["num_members"] > 0:
+            response = request.urlopen(CONVERSATIONS_MEMBERS_URL + "&channel=" + chan)
+            response_json = json.loads(response.read().decode(response.info().get_content_charset()))
+            print("- #" + channels[chan]["name"] + " ({} members)".format(len(response_json["members"])))
+            for member in response_json["members"]:
+                if member not in user_channels:
+                    user_channels[member] = []
+                user_channels[member].append(channels[chan]["name"])
+
     return user_channels
 
 
@@ -88,26 +101,29 @@ def filter_users(all_users, user_type):
 def print_inactive_users(all_users, active_users, user_type):
     users = filter_users(all_users, user_type)
     print("------------------------------------------")
-    print("These " + user_type + " users have not logged in during the last " +
-          str(PERIOD) + " days:")
+    print("These " + user_type + " users have not logged in during the last " + str(PERIOD) + " days:")
     inactive_users = set(users.keys()) - set(active_users.keys())
     for user in inactive_users:
         print(" - " + all_users[user]["profile"]["email"])
+
+
+def is_licensed(user):
+    return user["deleted"] is False and user["is_bot"] is False and user["is_ultra_restricted"] is False and user["id"] != SLACK_BOT_ID
 
 
 def print_single_channel_licensed_users(all_users, users_and_channels):
     print("------------------------------------------")
     print("These licensed users are members of less than 2 channels:")
     for user, channels in users_and_channels.items():
-        if len(channels) < 2:
-            print(" - " + all_users[user]["profile"]["email"])
+        if len(channels) < 2 and user in all_users and is_licensed(all_users[user]):
+            print(" - " + all_users[user]["profile"]["email"] + "(" + user + ") belongs to #" + ", #".join(channels))
 
 
 if __name__ == "__main__":
     all_users = get_users_list()
+    all_channels = get_conversations_list()
+    users_and_channels = get_users_and_channels(all_channels)
     active_users = get_lately_logged_in_users()
-    users_and_channels = get_users_and_channels()
-
     print_inactive_users(all_users, active_users, "licensed")
     print_inactive_users(all_users, active_users, "free")
     print_single_channel_licensed_users(all_users, users_and_channels)
