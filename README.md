@@ -4,6 +4,7 @@ Simple script to find inactive users in a slack workspace. Prints the following:
 
 - Licensed users that hasn't logged in lately
 - Free users that hasn't logged in lately
+- Licensed users that are members of only one channel
 
 Pythonified from a bash script from [@jannylund](http://github.com/jannylund)
 
