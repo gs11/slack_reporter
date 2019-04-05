@@ -11,6 +11,27 @@ CONVERSATIONS_MEMBERS_URL = "https://slack.com/api/conversations.members?token="
 SLACK_BOT_ID = "USLACKBOT"
 PERIOD = 90
 
+# Ignore bots.
+def is_active(user):
+    return user["deleted"] is False and user["is_bot"] is False and user["id"] != SLACK_BOT_ID
+
+def is_owner(user):
+    return is_active(user) and user["is_owner"] is True
+
+def is_admin(user):
+    return is_active(user) and user["is_admin"] is True
+
+def is_member(user):
+    return is_active(user) and not is_admin(user) and not is_licensed(user) and not is_free(user)
+
+# Multichannel-guest
+def is_licensed(user):
+    return is_active(user) and not is_free(user) and user["is_restricted"] is True
+
+# Single-channel guests
+def is_free(user):
+    return is_active(user) and user["is_ultra_restricted"] is True
+
 
 def get_users_list():
     users = {}
@@ -20,10 +41,18 @@ def get_users_list():
     response_json = json.loads(response.read().decode(response.info().get_content_charset()))
     if response_json["ok"] is False:
         raise Exception("Slack API returned error: " + response_json["error"])
-    print("done ({} users)".format(len(response_json["members"])))
 
-    for user in response_json["members"]:
-        if "email" in user["profile"]:
+    members = response_json["members"]
+    print("done ({} users)".format(len(members)))
+    print("- {} owners.".format(len([u for u in members if is_owner(u)])))
+    print("- {} administrators.".format(len([u for u in members if is_admin(u)])))
+    print("- {} full members.".format(len([u for u in members if is_member(u)])))
+    print("- {} multichannel guests.".format(len([u for u in members if is_licensed(u)])))
+    print("- {} singlechannel guests.".format(len([u for u in members if is_free(u)])))
+    print("- {} deactivated users.".format(len([u for u in members if not is_active(u)])))
+
+    for user in members:
+        if is_active(user):
             users[user["id"]] = user
     return users
 
@@ -89,11 +118,11 @@ def get_users_and_channels(channels):
 def filter_users(all_users, user_type):
     users = {}
     if user_type == "licensed":
-        is_ultra_restricted = False
+        is_single_channel_user = False
     else:
-        is_ultra_restricted = True
+        is_single_channel_user = True
     for id, user in all_users.items():
-        if user["deleted"] is False and user["is_bot"] is False and user["is_ultra_restricted"] is is_ultra_restricted and user["id"] != SLACK_BOT_ID:
+        if is_active(user) and is_free(user) == is_single_channel_user:
             users[id] = user
     return users
 
@@ -105,10 +134,6 @@ def print_inactive_users(all_users, active_users, user_type):
     inactive_users = set(users.keys()) - set(active_users.keys())
     for user in inactive_users:
         print(" - " + all_users[user]["profile"]["email"])
-
-
-def is_licensed(user):
-    return user["deleted"] is False and user["is_bot"] is False and user["is_ultra_restricted"] is False and user["id"] != SLACK_BOT_ID
 
 
 def print_single_channel_licensed_users(all_users, users_and_channels):
