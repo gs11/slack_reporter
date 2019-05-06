@@ -1,7 +1,9 @@
-from urllib import request
-import json
 from datetime import datetime, timedelta
+from urllib import request
+import argparse
+import json
 import os
+import re
 
 TOKEN = os.getenv('SLACKTOKEN')
 USERS_LIST_URL = "https://slack.com/api/users.list?token=" + TOKEN
@@ -57,22 +59,25 @@ def get_users_list():
     return users
 
 
-def get_conversations_list(private = False):
+def get_conversations_list(private = False, filter=".*"):
     conversations = {}
     if private:
         channel_types = "private_channel"
     else:
         channel_types = "public_channel"
 
-    print("Fetching {} conversations...".format(channel_types), end="", flush=True)
+    print("Fetching {} conversations for filter '{}'...".format(channel_types, filter), end="", flush=True)
     response = request.urlopen(CONVERSATIONS_LIST_URL + "&types=" + channel_types)
     response_json = json.loads(response.read().decode(response.info().get_content_charset()))
     if response_json["ok"] is False:
         raise Exception("Slack API returned error: " + response_json["error"])
-    print("done ({} channels)".format(len(response_json["channels"])))
 
+    pattern = re.compile(filter)
     for channel in response_json["channels"]:
-        conversations[channel["id"]] = channel
+        if pattern.match(channel["name"]) != None:
+            conversations[channel["id"]] = channel
+
+    print("done ({}/{} channels)".format(len(conversations), len(response_json["channels"])))
     return conversations
 
 
@@ -159,18 +164,47 @@ def print_private_channels():
     print_separator()
 
 
+def print_users_and_channels(all_users, users_and_channels):
+    email_channels = {}
+    for user, channels in users_and_channels.items():
+        if user in all_users and all_users[user]["profile"]["email"]:
+            email = all_users[user]["profile"]["email"]
+            email_channels[email] = channels
+
+    print_separator()
+    for email, channels in sorted(email_channels.items()):
+        print(" - " + email + " belongs to #" + ", #".join(sorted(channels)))
+    print_separator()
+
 def print_separator():
     print("------------------------------------------")
 
 
 if __name__ == "__main__":
-    all_users = get_users_list()
-    all_channels = get_conversations_list(private = False)
-    users_and_channels = get_users_and_channels(all_channels)
-    active_users = get_lately_logged_in_users()
-    print_inactive_users(all_users, active_users, "licensed")
-    print_inactive_users(all_users, active_users, "free")
-    print_single_channel_licensed_users(all_users, users_and_channels)
+    parser = argparse.ArgumentParser(description='Slack client for user reporting.')
+    parser.add_argument('--channels',
+                        dest='channels',
+                        help='Limit reporting to channels', 
+                        default='.*')
+    parser.add_argument('--report',
+                        dest='report',
+                        help='Report type: inactive, channel', 
+                        choices=['inactive', 'channel', 'private'],
+                        default='inactive')
+    args = parser.parse_args()
 
-    # Find private channels and list them.
-    print_private_channels()
+    if args.report == "inactive":
+        all_users = get_users_list()
+        all_channels = get_conversations_list(private = False, filter=args.channels)
+        users_and_channels = get_users_and_channels(all_channels)
+        active_users = get_lately_logged_in_users()
+        print_inactive_users(all_users, active_users, "licensed")
+        print_inactive_users(all_users, active_users, "free")
+        print_single_channel_licensed_users(all_users, users_and_channels)
+    elif args.report == "channel":
+        all_users = get_users_list()
+        all_channels = get_conversations_list(private = False, filter=args.channels)
+        users_and_channels = get_users_and_channels(all_channels)
+        print_users_and_channels(all_users, users_and_channels)
+    elif args.report == "private":
+        print_private_channels()
