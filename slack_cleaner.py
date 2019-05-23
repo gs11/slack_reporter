@@ -163,7 +163,7 @@ def print_private_channels():
         print("- #" + channels[chan]["name"])
     print_separator()
 
-
+# A report with user list and channels the user belong to.
 def print_users_and_channels(all_users, users_and_channels):
     email_channels = {}
     for user, channels in users_and_channels.items():
@@ -174,6 +174,25 @@ def print_users_and_channels(all_users, users_and_channels):
     print_separator()
     for email, channels in sorted(email_channels.items()):
         print(" - " + email + " belongs to #" + ", #".join(sorted(channels)))
+    print_separator()
+
+# A report of channels and which users belongs to it.
+def print_channels_and_users(all_users, users_and_channels):
+    channels_user = {}
+    for user, channels in users_and_channels.items():
+        if user in all_users and all_users[user]["profile"]["email"]:
+            email = all_users[user]["profile"]["email"]
+            for channel in channels:
+                if not channel in channels_user:
+                    channels_user[channel] = []
+                channels_user[channel].append(email)
+
+    print_separator()
+    for channel, users in sorted(channels_user.items()):
+        print_separator()
+        print("Members of #" + channel)
+        for user in sorted(users):
+            print(" - " + user)
     print_separator()
 
 def print_separator():
@@ -189,7 +208,7 @@ if __name__ == "__main__":
     parser.add_argument('--report',
                         dest='report',
                         help='Report type: inactive, channel', 
-                        choices=['inactive', 'channel', 'private'],
+                        choices=['inactive', 'channel', 'private', 'user'],
                         default='inactive')
     args = parser.parse_args()
 
@@ -201,10 +220,15 @@ if __name__ == "__main__":
         print_inactive_users(all_users, active_users, "licensed")
         print_inactive_users(all_users, active_users, "free")
         print_single_channel_licensed_users(all_users, users_and_channels)
-    elif args.report == "channel":
+    elif args.report == "user":
         all_users = get_users_list()
         all_channels = get_conversations_list(private = False, filter=args.channels)
         users_and_channels = get_users_and_channels(all_channels)
         print_users_and_channels(all_users, users_and_channels)
+    elif args.report == "channel":
+        all_users = get_users_list()
+        all_channels = get_conversations_list(private = False, filter=args.channels)
+        users_and_channels = get_users_and_channels(all_channels)
+        print_channels_and_users(all_users, users_and_channels)
     elif args.report == "private":
         print_private_channels()
