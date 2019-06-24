@@ -9,7 +9,7 @@ TOKEN = os.getenv('SLACKTOKEN')
 USERS_LIST_URL = "https://slack.com/api/users.list?token=" + TOKEN
 ACCESS_LOGS_URL = "https://slack.com/api/team.accessLogs?token=" + TOKEN + "&count=1000"
 CONVERSATIONS_LIST_URL = "https://slack.com/api/conversations.list?token=" + TOKEN + "&limit=1000&exclude_archived=true"
-CONVERSATIONS_MEMBERS_URL = "https://slack.com/api/conversations.members?token=" + TOKEN
+CONVERSATIONS_MEMBERS_URL = "https://slack.com/api/conversations.members?token=" + TOKEN + "&limit=1000"
 SLACK_BOT_ID = "USLACKBOT"
 PERIOD = 90
 
